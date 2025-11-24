@@ -1,0 +1,57 @@
+syntax = "proto3";
+option go_package = "auction/grpc";
+
+message BidRequest {
+  int64 lamport_timestamp = 1;
+  string client_id = 2;
+  int64 amount = 3;
+}
+
+message Acknowledgement {
+  int64 lamport_timestamp = 1;
+  string server_id = 2;
+  string Status = 3;
+}
+
+message SubscribeRequest {
+  int64 lamport_timestamp = 1;
+  string client_id = 2;
+}
+
+message Result {
+int64 lamport_timestamp = 1;
+string server_id =2;
+int64 amount = 3;
+string client_id = 4;
+}
+
+message QueryRequest {
+  int64 lamport_timestamp = 1;
+  string client_id= 2;
+}
+
+message AuctionStatus{
+  int64 lamport_timestamp = 1;
+  string server_id = 2;
+  string client_id = 3;
+  int64 highest_bid = 4;
+  string leader_id = 5;
+}
+
+enum Status {
+  FAIL = 0;
+  SUCCESS = 1;
+  EXCEPTION = 2;
+}
+
+service Bidding {
+  rpc Bid (stream BidRequest) returns (stream Acknowledgement) {};
+}
+
+service Auction{
+  rpc Subscribe (SubscribeRequest) returns (stream Result) {};
+}
+
+service Query {
+  rpc GetAuctionStatus (QueryRequest) returns (AuctionStatus) {};
+}

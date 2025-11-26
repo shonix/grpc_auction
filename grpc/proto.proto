@@ -55,3 +55,47 @@ service Auction{
 service Query {
   rpc GetAuctionStatus (QueryRequest) returns (AuctionStatus) {};
 }
+
+// NODE TO NODE COMMUNICATION :
+
+message Ping {
+  int64 lamport_timestamp = 1;
+  string leader_id = 2;
+}
+
+message PingReply {
+  int64 lamport_timestamp = 1;
+  string node_id = 2;
+  bool alive = 3;
+}
+
+message VoteRequest {
+  int64 lamport_timestamp = 1;
+  string candidate_id = 2;
+}
+
+message VoteReply {
+  int64 lamport_timestamp = 1;
+  string node_id = 2;
+  bool vote_granted = 3;
+}
+
+message StateUpdate {
+  int64 lamport_timestamp = 1;
+  string leader_id = 2;
+  int64 highest_bid = 3;
+  string highest_bidder = 4;
+  bool auction_over = 5;
+}
+
+message StateAck {
+  int64 lamport_timestamp = 1;
+  string node_id = 2;
+  bool accepted = 3;
+}
+
+service NodeToNode {
+  rpc SendPing (Ping) returns (PingReply) {};
+  rpc AskForVote (VoteRequest) returns (VoteReply) {};
+  rpc SendStateUpdate (StateUpdate) returns (StateAck) {};
+}

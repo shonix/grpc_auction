@@ -2,6 +2,7 @@ package main
 
 import (
 	proto "auction/grpc"
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -42,31 +43,99 @@ func main() {
 	}
 	defer conn.Close()
 
-	//biddingClient := proto.NewBiddingClient(conn)
-	//auctionClient := proto.NewAuctionClient(conn)
+	biddingClient := proto.NewBiddingClient(conn)
+	auctionClient := proto.NewAuctionClient(conn)
+	queryClient := proto.NewQueryClient(conn)
 
-	//create bidding stream
+	client := &Client{clientId: "client1"}
+	ctx := context.Background()
+
+	//Setting up bidding stream
+	bidStream, err := biddingClient.Bid(ctx)
+	if err != nil {
+		log.Fatalf("could not open bidding stream: %v", err)
+	}
+	go setupBiddingStream(client, bidStream)
+
+	//Setting up subscription to server auction push notifications
+	subReq := &proto.SubscribeRequest{
+		LamportTimestamp: client.incrementClock(),
+		ClientId:         client.clientId,
+	}
+
+	subStream, err := auctionClient.Subscribe(ctx, subReq)
+	if err != nil {
+		log.Fatalf("could not open auction stream: %v", err)
+	}
+	go setupSubscribeStream(client, subStream)
+
+	//console controls
+	for {
+		var cmd string
+		fmt.Println("> Enter command (bid/query)")
+		fmt.Scanln(&cmd)
+
+		switch cmd {
+		case "bid":
+			var amount int64
+			fmt.Println("> Enter bid amount: ")
+			fmt.Scanln(&amount)
+
+			if err := bid(client, bidStream, amount); err != nil {
+				log.Fatalf("could not send bid: %v", err)
+			}
+		case "query":
+			ts := client.incrementClock()
+			status, err := queryClient.GetAuctionStatus(ctx, &proto.QueryRequest{
+				LamportTimestamp: ts,
+				ClientId:         client.clientId,
+			})
+			if err != nil {
+				fmt.Printf("could not get auction status: %v", err)
+				continue
+			}
+			client.updateClock(status.LamportTimestamp)
+			fmt.Println("STATUS: ", status)
+		default:
+			fmt.Println("Invalid command. Use 'bid' or 'query'.")
+		}
+
+	}
 
 }
 
-func setupBiddingStream(stream proto.Bidding_BidClient) {
+func setupBiddingStream(client *Client, stream proto.Bidding_BidClient) {
 	for {
 		ack, err := stream.Recv()
 		if err != nil {
 			log.Fatalf("Bidding stream closed:", err)
 			return
 		}
-		fmt.Println("Recieved ACK:", ack)
+		client.updateClock(ack.LamportTimestamp)
+		fmt.Println("ACK:", ack)
 	}
 }
 
-func setupSubscribeStream(stream proto.Auction_SubscribeClient) {
+func setupSubscribeStream(client *Client, stream proto.Auction_SubscribeClient) {
 	for {
 		result, err := stream.Recv()
 		if err != nil {
 			log.Fatalf("Subscribe stream closed:", err)
 			return
 		}
-		fmt.Println("Recieved ACK:", result)
+		client.updateClock(result.LamportTimestamp)
+		fmt.Println("AUCTION UPDATE:", result)
 	}
+}
+
+func bid(c *Client, stream proto.Bidding_BidClient, amount int64) error {
+	ts := c.incrementClock()
+
+	bid := &proto.BidRequest{
+		LamportTimestamp: ts,
+		ClientId:         c.clientId,
+		Amount:           amount,
+	}
+
+	return stream.Send(bid)
 }

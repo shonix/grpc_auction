@@ -1,19 +1,37 @@
-# grpc_auction
+# Assignment 5 -- Distributed Auction System
 
-Write a 2-page report (if necessary you can go up to 3 pages)
-containing the following structure (exactly create four sections as
-below):
+"You must implement a **distributed auction system** using replication:
+a distributed component which handles auctions, and provides
+operations for bidding and querying the state of an auction. The
+component must faithfully implement the semantics of the system
+described below, and must at least be resilient to one (1) crash
+failure."
 
-- Introduction. A short introduction to what you have done.
+## Running the program:
 
-- Architecture. A description of the architecture of the system and
-  its protocols (behaviour), including any protocols used internally
-  between nodes of the system.
+### 1. Start 3 servers (in separate terminals)
 
-- Correctness 1. Argue whether your implementation satisfies
-  linearisability or sequential consistency. In order to do so, first,
-  you must state precisely what such property is.
+```bash
+go run server/server.go -port=5050 -peers=localhost:5051,localhost:5052 -duration=60
+go run server/server.go -port=5051 -peers=localhost:5050,localhost:5052 -duration=60
+go run server/server.go -port=5052 -peers=localhost:5050,localhost:5051 -duration=60
+```
 
-- Correctness 2. An argument that your protocol is correct in the
-  absence and the presence of failures.
-  
+### 2. Start a client
+
+```bash
+go run client/client.go -id=alice -servers=localhost:5050,localhost:5051,localhost:5052
+```
+
+### 3. The client commands are the following:
+
+- `bid <amount>` - Place a bid
+- `status` - Check current highest bid
+- `quit` - Exit
+
+## How does it work? :D
+
+- The node with the highest port become the leader
+- The leader replicates state to followers after each and every bid
+- If the leader crashes, then the followers "elect" a new leader
+- The client are able to connect to any server (and the bids are forwarded to the leader)

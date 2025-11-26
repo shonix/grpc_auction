@@ -325,6 +325,7 @@ const (
 	NodeToNode_SendPing_FullMethodName        = "/NodeToNode/SendPing"
 	NodeToNode_AskForVote_FullMethodName      = "/NodeToNode/AskForVote"
 	NodeToNode_SendStateUpdate_FullMethodName = "/NodeToNode/SendStateUpdate"
+	NodeToNode_ForwardBid_FullMethodName      = "/NodeToNode/ForwardBid"
 )
 
 // NodeToNodeClient is the client API for NodeToNode service.
@@ -334,6 +335,7 @@ type NodeToNodeClient interface {
 	SendPing(ctx context.Context, in *Ping, opts ...grpc.CallOption) (*PingReply, error)
 	AskForVote(ctx context.Context, in *VoteRequest, opts ...grpc.CallOption) (*VoteReply, error)
 	SendStateUpdate(ctx context.Context, in *StateUpdate, opts ...grpc.CallOption) (*StateAck, error)
+	ForwardBid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Acknowledgement, error)
 }
 
 type nodeToNodeClient struct {
@@ -374,6 +376,16 @@ func (c *nodeToNodeClient) SendStateUpdate(ctx context.Context, in *StateUpdate,
 	return out, nil
 }
 
+func (c *nodeToNodeClient) ForwardBid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Acknowledgement, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Acknowledgement)
+	err := c.cc.Invoke(ctx, NodeToNode_ForwardBid_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NodeToNodeServer is the server API for NodeToNode service.
 // All implementations must embed UnimplementedNodeToNodeServer
 // for forward compatibility.
@@ -381,6 +393,7 @@ type NodeToNodeServer interface {
 	SendPing(context.Context, *Ping) (*PingReply, error)
 	AskForVote(context.Context, *VoteRequest) (*VoteReply, error)
 	SendStateUpdate(context.Context, *StateUpdate) (*StateAck, error)
+	ForwardBid(context.Context, *BidRequest) (*Acknowledgement, error)
 	mustEmbedUnimplementedNodeToNodeServer()
 }
 
@@ -399,6 +412,9 @@ func (UnimplementedNodeToNodeServer) AskForVote(context.Context, *VoteRequest) (
 }
 func (UnimplementedNodeToNodeServer) SendStateUpdate(context.Context, *StateUpdate) (*StateAck, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendStateUpdate not implemented")
+}
+func (UnimplementedNodeToNodeServer) ForwardBid(context.Context, *BidRequest) (*Acknowledgement, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForwardBid not implemented")
 }
 func (UnimplementedNodeToNodeServer) mustEmbedUnimplementedNodeToNodeServer() {}
 func (UnimplementedNodeToNodeServer) testEmbeddedByValue()                    {}
@@ -475,6 +491,24 @@ func _NodeToNode_SendStateUpdate_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeToNode_ForwardBid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BidRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeToNodeServer).ForwardBid(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeToNode_ForwardBid_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeToNodeServer).ForwardBid(ctx, req.(*BidRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NodeToNode_ServiceDesc is the grpc.ServiceDesc for NodeToNode service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -493,6 +527,10 @@ var NodeToNode_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendStateUpdate",
 			Handler:    _NodeToNode_SendStateUpdate_Handler,
+		},
+		{
+			MethodName: "ForwardBid",
+			Handler:    _NodeToNode_ForwardBid_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

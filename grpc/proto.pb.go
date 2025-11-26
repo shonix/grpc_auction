@@ -864,7 +864,7 @@ const file_grpc_proto_proto_rawDesc = "" +
 	"\aAuction\x12+\n" +
 	"\tSubscribe\x12\x11.SubscribeRequest\x1a\a.Result\"\x000\x012<\n" +
 	"\x05Query\x123\n" +
-	"\x10GetAuctionStatus\x12\r.QueryRequest\x1a\x0e.AuctionStatus\"\x002\x85\x01\n" +
+	"\x10GetAuctionStatus\x12\r.QueryRequest\x1a\x0e.AuctionStatus\"\x002\xb4\x01\n" +
 	"\n" +
 	"NodeToNode\x12\x1f\n" +
 	"\bSendPing\x12\x05.Ping\x1a\n" +
@@ -872,7 +872,9 @@ const file_grpc_proto_proto_rawDesc = "" +
 	"\n" +
 	"AskForVote\x12\f.VoteRequest\x1a\n" +
 	".VoteReply\"\x00\x12,\n" +
-	"\x0fSendStateUpdate\x12\f.StateUpdate\x1a\t.StateAck\"\x00B\x0eZ\fauction/grpcb\x06proto3"
+	"\x0fSendStateUpdate\x12\f.StateUpdate\x1a\t.StateAck\"\x00\x12-\n" +
+	"\n" +
+	"ForwardBid\x12\v.BidRequest\x1a\x10.Acknowledgement\"\x00B\x0eZ\fauction/grpcb\x06proto3"
 
 var (
 	file_grpc_proto_proto_rawDescOnce sync.Once
@@ -910,14 +912,16 @@ var file_grpc_proto_proto_depIdxs = []int32{
 	7,  // 3: NodeToNode.SendPing:input_type -> Ping
 	9,  // 4: NodeToNode.AskForVote:input_type -> VoteRequest
 	11, // 5: NodeToNode.SendStateUpdate:input_type -> StateUpdate
-	2,  // 6: Bidding.Bid:output_type -> Acknowledgement
-	4,  // 7: Auction.Subscribe:output_type -> Result
-	6,  // 8: Query.GetAuctionStatus:output_type -> AuctionStatus
-	8,  // 9: NodeToNode.SendPing:output_type -> PingReply
-	10, // 10: NodeToNode.AskForVote:output_type -> VoteReply
-	12, // 11: NodeToNode.SendStateUpdate:output_type -> StateAck
-	6,  // [6:12] is the sub-list for method output_type
-	0,  // [0:6] is the sub-list for method input_type
+	1,  // 6: NodeToNode.ForwardBid:input_type -> BidRequest
+	2,  // 7: Bidding.Bid:output_type -> Acknowledgement
+	4,  // 8: Auction.Subscribe:output_type -> Result
+	6,  // 9: Query.GetAuctionStatus:output_type -> AuctionStatus
+	8,  // 10: NodeToNode.SendPing:output_type -> PingReply
+	10, // 11: NodeToNode.AskForVote:output_type -> VoteReply
+	12, // 12: NodeToNode.SendStateUpdate:output_type -> StateAck
+	2,  // 13: NodeToNode.ForwardBid:output_type -> Acknowledgement
+	7,  // [7:14] is the sub-list for method output_type
+	0,  // [0:7] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

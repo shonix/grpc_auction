@@ -23,30 +23,115 @@ type BidderClient struct {
 	lamportTime int64
 	timeLock    sync.Mutex
 
+	// connection to the current server
 	conn          *grpc.ClientConn
 	biddingClient proto.BiddingClient
 	auctionClient proto.AuctionClient
 	queryClient   proto.QueryClient
+	bidStream     proto.Bidding_BidClient
 
-	bidStream proto.Bidding_BidClient
+	// failover
+	serverAddresses  []string // list of all of the server addresses
+	currentServerIdx int      // index of all thee currently connectted seerver
+	connLock         sync.Mutex
 }
 
-func NewBidderClient(clientID, serverAddress string) (*BidderClient, error) {
-	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, fmt.Errorf("couldn't connect to the server: %v", err)
+func NewBidderClient(clientID string, serverAddresses []string) (*BidderClient, error) {
+	if len(serverAddresses) == 0 {
+		return nil, fmt.Errorf("at least one server address is required")
 	}
 
 	client := &BidderClient{
-		clientID:      clientID,
-		lamportTime:   0,
-		conn:          conn,
-		biddingClient: proto.NewBiddingClient(conn),
-		auctionClient: proto.NewAuctionClient(conn),
-		queryClient:   proto.NewQueryClient(conn),
+		clientID:         clientID,
+		lamportTime:      0,
+		serverAddresses:  serverAddresses,
+		currentServerIdx: 0,
+	}
+
+	// first we try to connect to the first availlbable server
+	err := client.connectToServer(serverAddresses[0])
+	if err != nil {
+		// then we try other servers
+		connected := false
+		for i := 1; i < len(serverAddresses); i++ {
+			if err := client.connectToServer(serverAddresses[i]); err == nil {
+				client.currentServerIdx = i
+				connected = true
+				break
+			}
+		}
+		if !connected {
+			return nil, fmt.Errorf("couldn't connect to any server")
+		}
 	}
 
 	return client, nil
+}
+
+// connectToServer makes a conection to a specific server
+func (c *BidderClient) connectToServer(address string) error {
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("couldn't connect to %s: %v", address, err)
+	}
+
+	c.conn = conn
+	c.biddingClient = proto.NewBiddingClient(conn)
+	c.auctionClient = proto.NewAuctionClient(conn)
+	c.queryClient = proto.NewQueryClient(conn)
+
+	log.Printf("Connected to server at %s", address)
+	return nil
+}
+
+// switchToNextServer then tries to connect to the next available server that there is
+func (c *BidderClient) switchToNextServer(ctx context.Context) error {
+	c.connLock.Lock()
+	defer c.connLock.Unlock()
+
+	// closing the current connection
+	if c.conn != nil {
+		c.conn.Close()
+	}
+	c.bidStream = nil
+
+	// we try each server  in order
+	startIdx := c.currentServerIdx
+	for i := 0; i < len(c.serverAddresses); i++ {
+		nextIdx := (startIdx + i + 1) % len(c.serverAddresses)
+		addr := c.serverAddresses[nextIdx]
+
+		log.Printf("Trying to connect to %s...", addr)
+
+		if err := c.connectToServer(addr); err != nil {
+			log.Printf("Failed to connect to %s: %v", addr, err)
+			continue
+		}
+
+		c.currentServerIdx = nextIdx
+
+		// re establishing of the bid stream
+		if err := c.startBidStream(ctx); err != nil {
+			log.Printf("Failed to start the bid stream on %s: %v", addr, err)
+			continue
+		}
+
+		// re subscribing to the results
+		if err := c.subscribeToResults(ctx); err != nil {
+			log.Printf("Failed to subscribe on %s: %v", addr, err)
+			continue
+		}
+
+		log.Printf("Successfully switched to server %s", addr)
+		return nil
+	}
+
+	return fmt.Errorf("couldn't connect to any server")
+}
+
+// getCurrentServer returns the address of the currently connectedd server
+func (c *BidderClient) getCurrentServer() string {
+	return c.serverAddresses[c.currentServerIdx]
 }
 
 func (c *BidderClient) incrementTime() int64 {
@@ -192,14 +277,17 @@ func (c *BidderClient) close() {
 
 func main() {
 	clientID := flag.String("id", "", "Client ID (required)")
-	serverAddr := flag.String("server", "localhost:5050", "Server address")
+	servers := flag.String("servers", "localhost:5050", "list (comma seperated) of server addresses (for example localhost:5050,localhost:5051,localhost:5052 and so on)")
 	flag.Parse()
 
 	if *clientID == "" {
 		log.Fatal("Client ID is required. Use -id=<your_id>")
 	}
 
-	client, err := NewBidderClient(*clientID, *serverAddr)
+	// parsing the server addresses
+	serverAddresses := strings.Split(*servers, ",")
+
+	client, err := NewBidderClient(*clientID, serverAddresses)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
@@ -219,7 +307,7 @@ func main() {
 		log.Fatalf("Failed to subscribe to the auction results: %v", err)
 	}
 
-	fmt.Printf("You are connected as %s to %s\n", *clientID, *serverAddr)
+	fmt.Printf("You are connected as %s to %s\n", *clientID, client.getCurrentServer())
 	fmt.Println("Commands: bid <amount>, status, quit")
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -252,12 +340,26 @@ func main() {
 			err = client.placeBid(amount)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
+				// trying to switch  to another server
+				fmt.Println("Trying to switch to another server...")
+				if switchErr := client.switchToNextServer(ctx); switchErr != nil {
+					fmt.Printf("Failed to switch to another server: %v\n", switchErr)
+				} else {
+					fmt.Printf("Successfullyy switched to %s. Please try to do your bid again.\n", client.getCurrentServer())
+				}
 			}
 
 		case "status":
 			status, err := client.getAuctionStatus(ctx)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
+				// trying to switch to another server
+				fmt.Println("Trying to switch to another server...")
+				if switchErr := client.switchToNextServer(ctx); switchErr != nil {
+					fmt.Printf("Failed to switch to another server: %v\n", switchErr)
+				} else {
+					fmt.Printf("Successfully switched to  %s. Please try to do your bid again.\n", client.getCurrentServer())
+				}
 				continue
 			}
 			fmt.Printf("Highest bid: %d by %s\n", status.HighestBid, status.ClientId)

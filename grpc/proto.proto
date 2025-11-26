@@ -98,4 +98,5 @@ service NodeToNode {
   rpc SendPing (Ping) returns (PingReply) {};
   rpc AskForVote (VoteRequest) returns (VoteReply) {};
   rpc SendStateUpdate (StateUpdate) returns (StateAck) {};
+  rpc ForwardBid (BidRequest) returns (Acknowledgement) {};
 }

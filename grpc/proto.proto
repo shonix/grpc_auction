@@ -10,7 +10,7 @@ message BidRequest {
 message Acknowledgement {
   int64 lamport_timestamp = 1;
   string server_id = 2;
-  string Status = 3;
+  string status = 3;
 }
 
 message SubscribeRequest {
